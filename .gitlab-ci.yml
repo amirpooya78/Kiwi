@@ -1,0 +1,50 @@
+# npm works with Node.js. Here we get the latest Node.js version. Note that node contains npm 
+image: node:20-alpine3.16
+
+# here we define the different stages that the jobs will be distributed under
+stages:
+  - test
+  - build
+  - deploy
+  
+# before building we need to install the dependencies on the runner and change directory to SonarVisualizer.
+before_script:
+  - apk update
+  - apk add sshpass
+  - apk add openssh
+  - cd SonarVisualizer
+  - npm install
+
+# run npm run build on the GUI to ensure that it compiles.
+build-job:
+  # We want this job to be in the build stage, as we are building the dependencies here.
+  stage: build
+  # we want the the docker runner to execute this as the image can be run on a docker runner only
+  tags:
+    - docker
+  # the commands of script are run on the Gitlab runner which works on Linux OS.
+  script:
+    - npm run build
+
+# The test jobs runs the tests that have been written for the GUI.
+test-job:
+  # This the test job and should run in the test stage.
+  stage: test
+  tags:
+    - docker
+  script:
+    - npm run test
+
+ # this job runs only on main and deploys the GUI on the VPS.
+deploy-job:
+  # We want this job to be in the deployment stage.
+  stage: deploy
+  tags:
+    - docker
+  script:
+    - npm run build
+    - sshpass -p $KIWI_PASSWORD scp -o StrictHostKeyChecking=no -r ./dist/* kiwi@jnsl.tk:/var/www/kiwave
+  # we want to deploy on the server only the parts that are merged with the main branch. In other words, when the commit source is the branch main
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - when: never
